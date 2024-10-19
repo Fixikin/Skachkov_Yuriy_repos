@@ -1,1 +1,52 @@
-first line in branch
+#!/bin/bash
+
+# Создаем директорию для тестов
+TEST_LOG_DIR="./test_log"
+TEST_BACKUP_DIR="./test_backup"
+
+# Убедимся, что директории существуют
+mkdir -p "$TEST_LOG_DIR"
+mkdir -p "$TEST_BACKUP_DIR"
+
+# Функция для проверки результата
+function check_result {
+    if [ $? -eq 0 ]; then
+        echo "Тест пройден"
+    else
+        echo "Тест не пройден"
+        exit 1
+    fi
+}
+
+# 1. Создать тестовые файлы
+echo "Создание тестовых файлов..."
+for i in {1..10}; do
+    dd if=/dev/zero of="$TEST_LOG_DIR/test_file_$i.txt" bs=50M count=1
+done
+check_result
+
+# 2. Проверка, что скрипт архивирует файлы
+echo "Запуск основного скрипта для архивирования..."
+bash ../cleanup.sh "$TEST_LOG_DIR" 70
+check_result
+
+# 3. Проверяем, что файлы были перемещены в архив
+if [ "$(ls -1 "$TEST_BACKUP_DIR" | wc -l)" -ne 10 ]; then
+    echo "Ошибка: Не все файлы были архивированы."
+    exit 1
+fi
+echo "Все файлы успешно архивированы."
+
+# 4. Проверяем, что в тестовой директории осталось меньше 0.5 GB
+if [ "$(du -sh "$TEST_LOG_DIR" | awk '{print $1}')" ]; then
+    echo "Директория содержит менее 0,5 GB в файлах."
+else
+    echo "Ошибка: Директория не содержит менее 0,5 GB."
+    exit 1
+fi
+
+# Удаляем тестовые директории
+rm -rf "$TEST_LOG_DIR"
+rm -rf "$TEST_BACKUP_DIR"
+
+echo "Все тесты завершены."
