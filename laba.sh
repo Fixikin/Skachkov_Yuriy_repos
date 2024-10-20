@@ -52,14 +52,20 @@ if [ $usage -le $X ]; then
     exit 0
 fi
 
-echo "Usage $usage% exceeds threshhold $X%. Starting archiving process."
 
+#N input check
 if [ -z $4 ]; then
     echo "Default quantity of files to archive: N = 7"
-    N=7
+    N=3
 else
     N=$4
 fi
+if [ $N -lt 0 ]; then
+    echo "N has to be >=0"
+    exit 1
+fi
+
+echo "Usage $usage% exceeds threshhold $X%. Starting archiving process."
 
 #list of N oldest files in the directory
 files=$(ls -1t $dir | tail -n $N)

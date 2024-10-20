@@ -7,26 +7,16 @@ mkdir -p "$LOG_DIR"
 mkdir -p "$BACKUP_DIR"
 
 ARCHIVE_SCRIPT="./laba.sh"
-MAX_USAGE=${1:-80}
+MAX_USAGE=${1:-55}
 N=${2:-5}
 
-# Создаем директорию tmpfs с ограничением по памяти
-MOUNT_POINT="./limited_memory_folder"
-mkdir -p "$MOUNT_POINT"
-
-# Монтируем tmpfs с ограничением на 600 Мб
-sudo mount -t tmpfs -o size=600M tmpfs $MOUNT_POINT
-
-# Проверяем, удалось ли смонтировать
-if [ $? -ne 0 ]; then
-    echo "Ошибка: не удалось смонтировать tmpfs."
-    exit 1
+if [ -z $1 ] || [ -z $2]; then
+    echo "If you want to use your threshold and N-parameter, please enter them as arguments"
+    echo "Defaults are: 55% ; N = 5"
 fi
 
-
-
+#function to create and fill ./log with files
 fill_disk_usage() {
-    cd $MOUNT_POINT
     here=$(pwd)
     rm -rf "$LOG_DIR"
     rm -rf "$BACKUP_DIR"
@@ -43,12 +33,10 @@ fill_disk_usage() {
         dd if=/dev/urandom of="$LOG_DIR/file_$(date +%s%N).bin" bs=5M count=10 status=none
     done
     echo "Usage: $current_usage%"
-    cd -
 }
 
 #usage is less than threshhold
 test_case_1() {
-    #rm -rf "$BACKUP_DIR"
     echo "\ntest1"
     fill_disk_usage $(($MAX_USAGE-2))
     bash "$ARCHIVE_SCRIPT" "$LOG_DIR" "$BACKUP_DIR" "$MAX_USAGE" "$N"
@@ -62,8 +50,6 @@ test_case_1() {
 #usage is greater than threshold
 test_case_2() {
     echo "\ntest2"
-    #rm -rf "$LOG_DIR"
-    #rm -rf "$BACKUP_DIR"
     fill_disk_usage $(($MAX_USAGE+2))
     bash "$ARCHIVE_SCRIPT" "$LOG_DIR" "$BACKUP_DIR" "$MAX_USAGE" "$N"
 }
@@ -71,30 +57,42 @@ test_case_2() {
 
 #N < 0 test
 test_case_3() {
-    echo "\ntest3"
-    #rm -rf "$LOG_DIR"
-    #rm -rf "$BACKUP_DIR"
-
+    echo "\ntest N < 0"
     fill_disk_usage $(($MAX_USAGE+2))
 
-    bash "$ARCHIVE_SCRIPT" "$LOG_DIR" "$BACKUP_DIR" "$MAX_USAGE" -10
+    bash "$ARCHIVE_SCRIPT" "$LOG_DIR" "$BACKUP_DIR" "$MAX_USAGE" -1
 }
+
+#threshold (<0 | >100) test
+test_case_0() {
+    echo "\ntest threshold < 0"
+    fill_disk_usage $(($MAX_USAGE+2))
+
+    bash "$ARCHIVE_SCRIPT" "$LOG_DIR" "$BACKUP_DIR" -10 "$N"
+}
+
 
 # one big and 10 small files
 test_case_4() {
     echo "\ntest4"
-    #rm -rf "$LOG_DIR"
-    #rm -rf "$BACKUP_DIR"
     fill_disk_usage $(($MAX_USAGE+1))
     i=1
-    dd if=/dev/zero of="$LOG_DIR/file_big.log" bs=1000M count=1 status=none
+    DANGER=91
+    echo "Throwing in some more files..."
+    dd if=/dev/zero of="$LOG_DIR/file_big.log" bs=100M count=1 status=none
     while [ $i -le 10 ]; do
-        dd if=/dev/zero of="$LOG_DIR/file_$i.log" bs=25M count=1 status=none
+        dd if=/dev/zero of="$LOG_DIR/file_$i.log" bs=20M count=1 status=none
         i=$(( i+1 ))
+        current_usage=$(df "$here" | awk '{print $5}' | tail -n 1 | tr -d '%')
+        if [ "$current_usage" -ge "$DANGER" ]; then
+            break
+        fi
+
     done
     bash "$ARCHIVE_SCRIPT" "$LOG_DIR" "$BACKUP_DIR" "$MAX_USAGE" "$N"
 }
 
+test_case_0
 test_case_1
 test_case_2
 test_case_3
